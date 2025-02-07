@@ -1,15 +1,18 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 export default function Home() {
   const [message, setMessage] = useState('');
   const [response, setResponse] = useState('');
   const [loading, setLoading] = useState(false);
+  const [threadId, setThreadId] = useState<string | null>(null);
+  const [runId, setRunId] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setResponse('');
 
     try {
       const res = await fetch('/api/assistant', {
@@ -21,13 +24,49 @@ export default function Home() {
       });
 
       const data = await res.json();
-      setResponse(data.response);
+      setThreadId(data.threadId);
+      setRunId(data.runId);
     } catch (error) {
       console.error('Error:', error);
-    } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    const pollStatus = async () => {
+      if (!threadId || !runId || !loading) return;
+
+      try {
+        const res = await fetch('/api/assistant/status', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ threadId, runId }),
+        });
+
+        const data = await res.json();
+        
+        if (data.status === 'completed') {
+          setResponse(data.response);
+          setLoading(false);
+          setThreadId(null);
+          setRunId(null);
+        } else if (data.error) {
+          console.error('Error:', data.error);
+          setLoading(false);
+        } else {
+          // Continue polling
+          setTimeout(pollStatus, 1000);
+        }
+      } catch (error) {
+        console.error('Polling error:', error);
+        setLoading(false);
+      }
+    };
+
+    pollStatus();
+  }, [threadId, runId, loading]);
 
   return (
     <main className="p-4">

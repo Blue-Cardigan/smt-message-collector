@@ -9,7 +9,7 @@ const openai = new OpenAI({
 const tvly = tavily({ apiKey: process.env.TAVILY_API_KEY });
 
 // Function to perform Tavily search
-async function performTavilySearch(query: string) {
+export async function performTavilySearch(query: string) {
   const response = await tvly.search(query, {
     num_results: 3, // Limiting results per search for conciseness
   });
@@ -21,7 +21,7 @@ export async function POST(req: Request) {
     const { message } = await req.json();
     console.log('Received message:', message);
 
-    // Create an assistant with function calling capability
+    // Create an assistant
     const assistant = await openai.beta.assistants.create({
       name: "Research Assistant",
       instructions: `You are a helpful assistant that uses web search to provide comprehensive answers. 
@@ -46,83 +46,24 @@ export async function POST(req: Request) {
         }
       }]
     });
-    console.log('Created assistant:', assistant.id);
 
-    // Create a thread
+    // Create a thread and add the message
     const thread = await openai.beta.threads.create();
-    console.log('Created thread:', thread.id);
-
-    // Add a message to the thread
     await openai.beta.threads.messages.create(thread.id, {
       role: "user",
       content: message,
     });
-    console.log('Added message to thread');
 
-    // Run the assistant
+    // Start the run
     const run = await openai.beta.threads.runs.create(thread.id, {
       assistant_id: assistant.id,
     });
-    console.log('Started assistant run:', run.id);
 
-    // Handle the run with function calling
-    let runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
-    
-    while (runStatus.status !== "completed") {
-      console.log('Current run status:', runStatus.status);
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
-      
-      if (runStatus.status === "requires_action") {
-        const toolCalls = runStatus.required_action?.submit_tool_outputs.tool_calls;
-        console.log('Tool calls required:', toolCalls?.length);
-
-        const toolOutputs = [];
-
-        for (const toolCall of toolCalls || []) {
-          if (toolCall.function.name === "performTavilySearch") {
-            const query = JSON.parse(toolCall.function.arguments).query;
-            console.log('Executing search query:', query);
-            const searchResult = await performTavilySearch(query);
-            toolOutputs.push({
-              tool_call_id: toolCall.id,
-              output: JSON.stringify(searchResult),
-            });
-          }
-        }
-
-        // Submit tool outputs
-        await openai.beta.threads.runs.submitToolOutputs(
-          thread.id,
-          run.id,
-          { tool_outputs: toolOutputs }
-        );
-        console.log('Submitted tool outputs');
-      }
-      
-      if (runStatus.status === "failed") {
-        console.error('Run failed with status:', runStatus);
-        throw new Error("Assistant run failed");
-      }
-    }
-
-    console.log('Run completed successfully');
-
-    // Get the messages
-    const messages = await openai.beta.threads.messages.list(thread.id);
-    const lastMessage = messages.data[0];
-    
-    // Check if the content is text and extract the value
-    const messageContent = lastMessage.content[0];
-    if ('text' in messageContent) {
-      return NextResponse.json({ 
-        response: messageContent.text.value 
-      });
-    } else {
-      return NextResponse.json({ 
-        error: 'Unexpected response format' 
-      }, { status: 500 });
-    }
+    return NextResponse.json({ 
+      threadId: thread.id,
+      runId: run.id,
+      status: run.status
+    });
 
   } catch (error) {
     console.error('Error:', error);
