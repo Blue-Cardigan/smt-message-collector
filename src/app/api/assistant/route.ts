@@ -111,10 +111,18 @@ export async function POST(req: Request) {
     // Get the messages
     const messages = await openai.beta.threads.messages.list(thread.id);
     const lastMessage = messages.data[0];
-
-    return NextResponse.json({ 
-      response: lastMessage.content[0].text.value 
-    });
+    
+    // Check if the content is text and extract the value
+    const messageContent = lastMessage.content[0];
+    if ('text' in messageContent) {
+      return NextResponse.json({ 
+        response: messageContent.text.value 
+      });
+    } else {
+      return NextResponse.json({ 
+        error: 'Unexpected response format' 
+      }, { status: 500 });
+    }
 
   } catch (error) {
     console.error('Error:', error);
