@@ -75,11 +75,11 @@ export async function POST(req: Request) {
       
       if (runStatus.status === "requires_action") {
         const toolCalls = runStatus.required_action?.submit_tool_outputs.tool_calls;
-        console.log('Tool calls required:', toolCalls.length);
+        console.log('Tool calls required:', toolCalls?.length);
 
         const toolOutputs = [];
 
-        for (const toolCall of toolCalls) {
+        for (const toolCall of toolCalls || []) {
           if (toolCall.function.name === "performTavilySearch") {
             const query = JSON.parse(toolCall.function.arguments).query;
             console.log('Executing search query:', query);
