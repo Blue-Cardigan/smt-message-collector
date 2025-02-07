@@ -26,8 +26,8 @@ export async function POST(req: Request) {
       name: "Research Assistant",
       instructions: `You are a helpful assistant that uses web search to provide comprehensive answers. 
       When asked a question, first generate up to 5 relevant search queries to gather information, 
-      then synthesize the results into a well-structured response. Include relevant sources.`,
-      model: "gpt-4",
+      then synthesize the results into a well-structured response. Include relevant sources. The current date is ${new Date().toISOString().split('T')[0]}.`,
+      model: "gpt-4o",
       tools: [{
         type: "function",
         function: {
