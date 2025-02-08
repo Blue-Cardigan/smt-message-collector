@@ -4,6 +4,7 @@ import { tavily } from "@tavily/core";
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
+export const runtime = 'edge'
 
 const tvly = tavily({ apiKey: process.env.TAVILY_API_KEY });
 
