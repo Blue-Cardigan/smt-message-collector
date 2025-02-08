@@ -5,6 +5,7 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+export const maxDuration = 60;
 const tvly = tavily({ apiKey: process.env.TAVILY_API_KEY });
 
 async function performTavilySearch(query: string) {
