@@ -58,13 +58,15 @@ export async function POST(req: Request) {
          - Campaign details and direct impact
          - Names/roles of key organizers and spokespeople
          - Direct quotes from news sources and social media
-         - Official Twitter/X handles and relevant hashtags if found
+         - Complete URLs of the relevant sources, in format [source name](url)
+         - Official Twitter/X handles and relevant hashtags if found, in format [source name](url)
          - Coalition partners involved
          
       Focus on local/regional victories that demonstrate community organizing impact.
-      Exclude organizations with significant international media coverage.
-      
-      If the region has no relevant results, output only 'No relevant results found for ${region}.' and nothing else.`,
+      Do not include a summary.
+      Aim to find at least 1 relevant story for the region.
+      However, in the rare case that all of the results are irrelevant, your response should be 'No relevant results found.'.
+      `,
       model: "gpt-4o",
       tools: [{
         type: "function",
@@ -88,17 +90,21 @@ export async function POST(req: Request) {
 
     const thread = await openai.beta.threads.create();
 
-    // Send the search results to the assistant
-    await openai.beta.threads.messages.create(thread.id, {
-      role: "user",
-      content: `Analyze these search results for ${region} to find relevant social movement successes. Then find related social media activity for each success story.
+    const prompt = `Identify social movement successes from these search results for ${region}. Then find related social media activity for each success story.
 
 Search Results:
 ${JSON.stringify(searchResults, null, 2)}
 
 User prompt:
-${message}`,
+${message}`;
+
+    // Send the search results to the assistant
+    await openai.beta.threads.messages.create(thread.id, {
+      role: "user",
+      content: prompt,
     });
+
+    console.log('full prompt:', prompt);
 
     // Start the run
     const run = await openai.beta.threads.runs.create(thread.id, {

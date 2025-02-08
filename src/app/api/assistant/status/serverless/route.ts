@@ -20,7 +20,7 @@ async function performTavilySearch(query: string) {
 }
 
 async function handleInitialSearch(queries: string[], region: string) {
-  const regionQueries = queries.map((query: string) => `${region} ${query} -site:wikipedia.org`);
+  const regionQueries = queries.map((query: string) => `${region} ${query} -site:wikipedia.org -Trump`);
   const regionResults = await Promise.all(
     regionQueries.map(async (query: string) => {
           console.log(`Searching for: ${query}`);
