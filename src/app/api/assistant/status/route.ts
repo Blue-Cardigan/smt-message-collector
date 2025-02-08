@@ -9,7 +9,8 @@ const tvly = tavily({ apiKey: process.env.TAVILY_API_KEY });
 
 async function performTavilySearch(query: string) {
   const response = await tvly.search(query, {
-    num_results: 3, // Limiting results per search for conciseness
+    max_results: 5, // Limiting results per search for conciseness
+    time_range: "d",
   });
   return response;
 }
