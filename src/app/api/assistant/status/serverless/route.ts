@@ -13,7 +13,7 @@ async function performTavilySearch(query: string) {
   const response = await tvly.search(query, {
     max_results: 15,
     time_range: "day",
-    search_depth: "advanced",
+    // search_depth: "advanced",
   });
   return response;
 }

@@ -22,12 +22,7 @@ export async function POST(req: Request) {
       "Rights win protest",
       ],
       regions = [
-        "North America",
-        "South America",
-        "Africa",
-        "Asia",
-        "Europe",
-        "Oceania"
+        "Global"
       ]
     } = await req.json();
     
