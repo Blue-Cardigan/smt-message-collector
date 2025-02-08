@@ -5,6 +5,8 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+const smtApiKey = process.env.SMT_API_KEY;
+
 // Store assistant ID at module level
 let ASSISTANT_ID: string;
 
@@ -15,9 +17,18 @@ export async function POST(req: Request) {
     const { 
       message, 
       region,
-      queries
+      queries,
+      apiKey
     } = await req.json();
     
+    // Validate API key
+    if (apiKey !== smtApiKey) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
     console.log('Received message:', message);
     console.log('Search queries:', queries);
     console.log('Region:', region);
