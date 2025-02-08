@@ -14,21 +14,19 @@ export async function POST(req: Request) {
   try {
     const { 
       message, 
+      region,
       queries = [
         "campaign victory justice",
       "campaign win protest",
       "government protest victory",
-      "community organizing success",
-      "Rights win protest",
-      ],
-      regions = [
-        "Global"
+      // "community organizing success",
+      // "Rights win protest",
       ]
     } = await req.json();
     
     console.log('Received message:', message);
     console.log('Search queries:', queries);
-    console.log('Regions:', regions);
+    console.log('Region:', region);
 
     // Forward search request to serverless endpoint
     const searchUrl = new URL('/api/assistant/status/serverless', req.url);
@@ -40,7 +38,7 @@ export async function POST(req: Request) {
       body: JSON.stringify({ 
         type: 'initial_search',
         queries,
-        regions 
+        region
       }),
     });
 
@@ -52,7 +50,7 @@ export async function POST(req: Request) {
       
       When you find a success story, ALWAYS use the performTavilySearch function to search for social media activity before including it in your report.
       
-      You will receive search results organized by region. For each region's success stories:
+      You will receive search results for a specific region. For each success story:
       1. Extract key details:
          - Region and location specifics
          - Campaign name and objectives
@@ -61,7 +59,7 @@ export async function POST(req: Request) {
          
       2. For each story, construct and perform Twitter-specific searches using "site:x.com" and your search function.
          
-      3. Synthesize all information into a clear newsletter format organized by region:
+      3. Synthesize all information into a clear newsletter format:
          ### [Region Name]
          - Campaign details and direct impact
          - Names/roles of key organizers and spokespeople
@@ -99,15 +97,13 @@ export async function POST(req: Request) {
     // Send the search results to the assistant
     await openai.beta.threads.messages.create(thread.id, {
       role: "user",
-      content: `Analyze these region-specific search results and find relevant social movement successes. Then find related social media activity for each success story.
+      content: `Analyze these search results for ${region} to find relevant social movement successes. Then find related social media activity for each success story.
 
 Search Results:
 ${JSON.stringify(searchResults, null, 2)}
 
-User question or context:
-${message}
-
-Organize your response by region, including only regions where relevant successes were found.`,
+User prompt:
+${message}`,
     });
 
     // Start the run
