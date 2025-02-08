@@ -35,9 +35,27 @@ export async function POST(req: Request) {
     console.log('Search queries:', queries);
     console.log('Regions:', regions);
 
+    // Forward search request to serverless endpoint
+    const searchUrl = new URL('/api/assistant/status/serverless', req.url);
+    const searchResponse = await fetch(searchUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ 
+        type: 'initial_search',
+        queries,
+        regions 
+      }),
+    });
+
+    const searchResults = await searchResponse.json();
+
     const assistant = await openai.beta.assistants.create({
       name: "Research Assistant",
-      instructions: `You are an expert web researcher that identifies the successes of grassroots social movements and finds related social media activity.
+      instructions: `You are an expert web researcher that identifies the successes of grassroots social movements, searches for related social media activity, and provides a newsletter with the results.
+      
+      When you find a success story, ALWAYS use the performTavilySearch function to search for social media activity before including it in your report.
       
       You will receive search results organized by region. For each region's success stories:
       1. Extract key details:
@@ -46,17 +64,14 @@ export async function POST(req: Request) {
          - Specific victories or outcomes achieved
          - Organizations and key people involved
          
-      2. For each story, construct and perform Twitter-specific searches using:
-         - Organization names + "site:x.com"
-         - Campaign hashtags + "site:x.com"
-         - Key organizer names + "site:x.com"
+      2. For each story, construct and perform Twitter-specific searches using "site:x.com" and your search function.
          
       3. Synthesize all information into a clear newsletter format organized by region:
          ### [Region Name]
          - Campaign details and direct impact
          - Names/roles of key organizers and spokespeople
-         - Direct quotes from both news sources and social media
-         - Official Twitter/X handles and relevant hashtags
+         - Direct quotes from news sources and social media
+         - Official Twitter/X handles and relevant hashtags if found
          - Coalition partners involved
          
       Focus on local/regional victories that demonstrate community organizing impact.
@@ -68,13 +83,13 @@ export async function POST(req: Request) {
         type: "function",
         function: {
           name: "performTavilySearch",
-          description: "Search the web for real-time information including social media content",
+          description: "Search the web for Twitter/X activity on each story",
           parameters: {
             type: "object",
             properties: {
               query: {
                 type: "string",
-                description: "The search query to perform."
+                description: "The search query to perform. Use site:x.com for Twitter/X specific searches."
               }
             },
             required: ["query"]
@@ -84,21 +99,15 @@ export async function POST(req: Request) {
     });
     ASSISTANT_ID = assistant.id;
 
-    // Create a thread and add the message with search context
     const thread = await openai.beta.threads.create();
 
-    // Structure the search results by region
-    const searchContext = regions.map((region: string) => ({
-      region,
-      queries: queries.map((query: string) => `${query} ${region}`),
-    }));
-
+    // Send the search results to the assistant
     await openai.beta.threads.messages.create(thread.id, {
       role: "user",
       content: `Analyze these region-specific search results and find relevant social movement successes. Then find related social media activity for each success story.
 
-Search Context:
-${JSON.stringify(searchContext, null, 2)}
+Search Results:
+${JSON.stringify(searchResults, null, 2)}
 
 User question or context:
 ${message}
