@@ -9,26 +9,24 @@ const ASSISTANT_STATUS_URL = 'http://localhost:3000/api/assistant/status';
 const config = {
     prompt: "Identify wins made by grassroots social justice organizations in countries around the world",
     queries: [
-      "campaign victory justice",
-      "campaign win protest",
-      "government protest victory",
-      "community organizing success",
-      "Rights win protest",
+        "protest success activists",
+        "social movement campaign win activist",
+        "government protest victory activism",
     ],
     regions: [
         // "North America",
         // "South America",
-        // "Africa",
+        "Africa",
         "Asia",
         // "Europe",
-        // "Oceania"
+        // "Australia"
     ],
     pollInterval: 10, // seconds to wait between polls
     maxAttempts: 30 // maximum number of attempts
 };
 
 // Initial request to start the process
-async function makeInitialRequest(message, queries, regions) {
+async function makeInitialRequest(message, queries, region) {
     const response = await fetch(ASSISTANT_URL, {
         method: 'POST',
         headers: {
@@ -37,7 +35,7 @@ async function makeInitialRequest(message, queries, regions) {
         body: JSON.stringify({ 
             message,
             queries,
-            regions
+            region: region[0] // Since we're now passing an array with one region
         })
     });
     return await response.json();
@@ -84,40 +82,50 @@ async function main() {
     console.log('Queries:', queries);
     console.log('Regions:', regions);
     
-    // Make initial request
-    console.log('\nMaking initial request...');
-    const initialResponse = await makeInitialRequest(prompt, queries, regions);
-    console.log('Initial response:', initialResponse);
+    let allResponses = [];
     
-    // Poll until complete
-    let complete = false;
-    let finalResponse = null;
-    let attempts = 0;
-    
-    while (!complete && attempts < config.maxAttempts) {
-        attempts++;
-        console.log(`\nPoll attempt ${attempts}/${config.maxAttempts}`);
+    // Process each region separately
+    for (const region of regions) {
+        console.log(`\nProcessing region: ${region}`);
         
-        const statusResponse = await pollStatus(initialResponse.threadId, initialResponse.runId);
+        // Make initial request for this region
+        console.log('Making initial request...');
+        const initialResponse = await makeInitialRequest(prompt, queries, [region]);
+        console.log('Initial response:', initialResponse);
         
-        if (statusResponse.status === 'completed') {
-            complete = true;
-            finalResponse = statusResponse.response;
-            console.log('\nFinal response:', finalResponse);
-        } else if (statusResponse.error) {
-            throw new Error(statusResponse.error);
-        } else {
-            console.log(`Status: ${statusResponse.status}`);
-            console.log(`Waiting for ${config.pollInterval} seconds...`);
-            await sleep(config.pollInterval);
+        // Poll until complete
+        let complete = false;
+        let finalResponse = null;
+        let attempts = 0;
+        
+        while (!complete && attempts < config.maxAttempts) {
+            attempts++;
+            console.log(`\nPoll attempt ${attempts}/${config.maxAttempts}`);
+            
+            const statusResponse = await pollStatus(initialResponse.threadId, initialResponse.runId);
+            
+            if (statusResponse.status === 'completed') {
+                complete = true;
+                finalResponse = statusResponse.response;
+                console.log('\nFinal response:', finalResponse);
+                allResponses.push({ region, response: finalResponse });
+            } else if (statusResponse.status === 'failed') {
+                throw new Error(`Region ${region} failed: ${statusResponse.error}`);
+            } else if (statusResponse.error) {
+                throw new Error(statusResponse.error);
+            } else {
+                console.log(`Status: ${statusResponse.status}`);
+                console.log(`Waiting for ${config.pollInterval} seconds...`);
+                await sleep(config.pollInterval);
+            }
+        }
+        
+        if (!complete) {
+            throw new Error(`Request for region ${region} timed out after ${config.maxAttempts} attempts`);
         }
     }
     
-    if (!complete) {
-        throw new Error(`Request timed out after ${config.maxAttempts} attempts`);
-    }
-    
-    return finalResponse;
+    return allResponses;
 }
 
 // Run the script

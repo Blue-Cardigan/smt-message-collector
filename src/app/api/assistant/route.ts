@@ -16,11 +16,9 @@ export async function POST(req: Request) {
       message, 
       region,
       queries = [
-        "campaign victory justice",
-      "campaign win protest",
-      "government protest victory",
-      // "community organizing success",
-      // "Rights win protest",
+      "protest success activists",
+      "social movement campaign win activist",
+      "government protest victory activism",
       ]
     } = await req.json();
     
@@ -70,7 +68,7 @@ export async function POST(req: Request) {
       Focus on local/regional victories that demonstrate community organizing impact.
       Exclude organizations with significant international media coverage.
       
-      If a region has no relevant results, skip it in the final report.`,
+      If the region has no relevant results, output only 'No relevant results found for this region.' and nothing else.`,
       model: "gpt-4o",
       tools: [{
         type: "function",

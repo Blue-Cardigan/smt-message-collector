@@ -11,19 +11,18 @@ const tvly = tavily({ apiKey: process.env.TAVILY_API_KEY });
 
 async function performTavilySearch(query: string) {
   const response = await tvly.search(query, {
-    max_results: 15,
+    max_results: 10,
     time_range: "day",
+    // topic: "news"
     // search_depth: "advanced",
   });
   return response;
 }
 
-async function handleInitialSearch(queries: string[], regions: string[]) {
-  const searchResults = await Promise.all(
-    regions.map(async (region: string) => {
-      const regionQueries = queries.map((query: string) => `${query} ${region}`);
-      const regionResults = await Promise.all(
-        regionQueries.map(async (query: string) => {
+async function handleInitialSearch(queries: string[], region: string) {
+  const regionQueries = queries.map((query: string) => `${region} ${query} -site:wikipedia.org`);
+  const regionResults = await Promise.all(
+    regionQueries.map(async (query: string) => {
           console.log(`Searching for: ${query}`);
           return performTavilySearch(query);
         })
@@ -31,10 +30,7 @@ async function handleInitialSearch(queries: string[], regions: string[]) {
       return {
         region,
         results: regionResults
-      };
-    })
-  );
-  return searchResults;
+  };
 }
 
 async function handleToolCalls(threadId: string, runId: string, toolCalls: any[]) {
@@ -75,8 +71,8 @@ export async function POST(req: Request) {
     
     // Handle initial search request
     if (body.type === 'initial_search') {
-      const searchResults = await handleInitialSearch(body.queries, body.regions);
-      console.log('Search results:', searchResults[0]);
+      const searchResults = await handleInitialSearch(body.queries, body.region);
+      console.log('Search results:', searchResults.results[0]);
       return NextResponse.json(searchResults);
     }
     
@@ -84,6 +80,13 @@ export async function POST(req: Request) {
     const { threadId, runId } = body;
     const runStatus = await openai.beta.threads.runs.retrieve(threadId, runId);
     
+    if (runStatus.status === "failed") {
+      return NextResponse.json({ 
+        status: "failed",
+        error: runStatus.last_error?.message || "Run failed without specific error message"
+      });
+    }
+
     if (runStatus.status === "requires_action") {
       const toolCalls = runStatus.required_action?.submit_tool_outputs.tool_calls;
       if (toolCalls) {
