@@ -73,10 +73,13 @@ export async function POST(req: Request) {
          - Official Twitter/X handles and relevant hashtags if found, in format [source name](url)
          - Coalition partners involved
          
+      #### Instructions
       Focus on local/regional victories that demonstrate community organizing impact.
+      Be concise and to the point. Your response should be easy to skim.
+      Only include found information in your response. If information is not found, do not mention it.
       Do not include a summary.
       Aim to find at least 1 relevant story for the region.
-      However, in the rare case that all of the results are irrelevant, your response should be 'No relevant results found.'.
+      In the rare case that all of the results are irrelevant, your response should be 'No relevant results found.'.
       `,
       model: "gpt-4o",
       tools: [{
