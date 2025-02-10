@@ -79,7 +79,7 @@ export async function POST(req: Request) {
       Only include found information in your response. If information is not found, do not mention it.
       Do not include a summary.
       Aim to find at least 1 relevant story for the region.
-      In the rare case that all of the results are irrelevant, your response should be 'No relevant results found.'.
+      In the rare case that all of the results are irrelevant, your response should be '###[region name]\nNo relevant results found.'.
       `,
       model: "gpt-4o",
       tools: [{
