@@ -55,11 +55,14 @@ export async function POST(req: Request) {
       
       When you find a success story, ALWAYS use the performTavilySearch function to search for social media activity before including it in your report.
       
+      A success story is a grassroots social movement victory such as a campaign win, protest victory, or other social movement victory.
+      
       You will receive search results for a specific region. For each success story:
       1. Extract key details:
          - Region and location specifics
          - Campaign name and objectives
          - Specific victories or outcomes achieved
+         - Any other relevant details
          - Organizations and key people involved
          
       2. For each story, construct and perform Twitter-specific searches using "site:x.com" and your search function.
