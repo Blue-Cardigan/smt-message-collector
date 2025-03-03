@@ -162,6 +162,8 @@ This architecture ensures that:
 - Long-running AI and search operations can complete
 - Results are reliably delivered back to the caller
 
+NB: When hosted in vercel, sometimes the application times out if it finds a lot of relevant tweets. This returns an empty reponse. 
+
 ## API Endpoints
 
 ### POST /api/assistant
