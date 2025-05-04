@@ -1,13 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-
-// Default search queries
-const DEFAULT_QUERIES = [
-  "protest success activists",
-  "social movement campaign win activist",
-  "government protest victory activism",
-];
+import { useState } from 'react';
 
 // Available regions
 const REGIONS = [
@@ -23,37 +16,20 @@ export default function Home() {
   // Form inputs
   const [message, setMessage] = useState('Identify wins made by grassroots social justice organizations');
   const [region, setRegion] = useState(REGIONS[0]);
-  const [queries, setQueries] = useState(DEFAULT_QUERIES.join('\n'));
   const [apiKey, setApiKey] = useState('until-all-are-free');
   
   // Process state
   const [loading, setLoading] = useState(false);
-  const [currentStep, setCurrentStep] = useState(0);
-  const [threadId, setThreadId] = useState<string | null>(null);
-  const [runId, setRunId] = useState<string | null>(null);
   const [response, setResponse] = useState('');
   const [error, setError] = useState('');
-  
-  // Process steps
-  const steps = [
-    "Starting request",
-    "Searching for information",
-    "Processing with AI assistant",
-    "Generating report",
-    "Complete"
-  ];
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setResponse('');
     setError('');
-    setCurrentStep(1);
 
     try {
-      // Parse queries from textarea (one per line)
-      const queryList = queries.split('\n').filter(q => q.trim() !== '');
-      
       const res = await fetch('/api/assistant', {
         method: 'POST',
         headers: {
@@ -62,79 +38,28 @@ export default function Home() {
         body: JSON.stringify({ 
           message, 
           region,
-          queries: queryList,
           apiKey
         }),
       });
 
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || 'Failed to start process');
-      }
-
       const data = await res.json();
-      setThreadId(data.threadId);
-      setRunId(data.runId);
-      setCurrentStep(2);
+
+      if (!res.ok) {
+        throw new Error(data.error || `Request failed with status ${res.status}`);
+      }
+      
+      if (data.status === 'completed') {
+        setResponse(data.response);
+      } else {
+        throw new Error(data.error || 'Received unexpected response from server');
+      }
     } catch (error) {
       console.error('Error:', error);
       setError(error instanceof Error ? error.message : 'An unknown error occurred');
+    } finally {
       setLoading(false);
-      setCurrentStep(0);
     }
   };
-
-  useEffect(() => {
-    const pollStatus = async () => {
-      if (!threadId || !runId || !loading) return;
-
-      try {
-        const res = await fetch('/api/assistant/status', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ threadId, runId }),
-        });
-
-        if (!res.ok) {
-          const errorData = await res.json();
-          throw new Error(errorData.error || 'Failed to check status');
-        }
-
-        const data = await res.json();
-        
-        if (data.status === 'completed') {
-          setResponse(data.response);
-          setLoading(false);
-          setThreadId(null);
-          setRunId(null);
-          setCurrentStep(4); // Complete
-        } else if (data.error) {
-          setError(data.error);
-          setLoading(false);
-          setCurrentStep(0);
-        } else {
-          // Update step based on status
-          if (data.status === 'in_progress') {
-            setCurrentStep(2); // Processing with AI
-          } else if (data.status === 'requires_action') {
-            setCurrentStep(3); // Generating report
-          }
-          
-          // Continue polling
-          setTimeout(pollStatus, 2000);
-        }
-      } catch (error) {
-        console.error('Polling error:', error);
-        setError(error instanceof Error ? error.message : 'An error occurred while checking status');
-        setLoading(false);
-        setCurrentStep(0);
-      }
-    };
-
-    pollStatus();
-  }, [threadId, runId, loading]);
 
   // Format the response with Markdown-like syntax
   const formatResponse = (text: string) => {
@@ -169,6 +94,7 @@ export default function Home() {
                 onChange={(e) => setMessage(e.target.value)}
                 className="w-full p-2 border border-gray-300 rounded text-gray-800 bg-white"
                 placeholder="Enter your message"
+                disabled={loading}
               />
             </div>
             
@@ -178,21 +104,12 @@ export default function Home() {
                 value={region}
                 onChange={(e) => setRegion(e.target.value)}
                 className="w-full p-2 border border-gray-300 rounded text-gray-800 bg-white"
+                disabled={loading}
               >
                 {REGIONS.map((r) => (
                   <option key={r} value={r}>{r}</option>
                 ))}
               </select>
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium mb-1 text-gray-800">Search Queries (one per line)</label>
-              <textarea
-                value={queries}
-                onChange={(e) => setQueries(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded h-32 text-gray-800 bg-white"
-                placeholder="Enter search queries (one per line)"
-              />
             </div>
             
             <div>
@@ -203,13 +120,14 @@ export default function Home() {
                 onChange={(e) => setApiKey(e.target.value)}
                 className="w-full p-2 border border-gray-300 rounded text-gray-800 bg-white"
                 placeholder="Enter API key"
+                disabled={loading}
               />
             </div>
             
             <button
               type="submit"
               disabled={loading}
-              className="w-full px-4 py-2 bg-blue-700 text-white rounded hover:bg-blue-800 disabled:bg-blue-300 font-medium"
+              className="w-full px-4 py-2 bg-blue-700 text-white rounded hover:bg-blue-800 disabled:bg-gray-400 font-medium transition duration-150 ease-in-out"
             >
               {loading ? 'Processing...' : 'Start Search'}
             </button>
@@ -218,52 +136,34 @@ export default function Home() {
         
         {/* Results Section */}
         <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
-          <h2 className="text-xl font-semibold mb-4 text-gray-900">Process Status</h2>
+          <h2 className="text-xl font-semibold mb-4 text-gray-900">Results</h2>
           
-          {/* Progress Steps */}
-          <div className="mb-6">
-            <ol className="relative border-l border-gray-300 ml-3">
-              {steps.map((step, index) => (
-                <li key={index} className="mb-6 ml-6">
-                  <span className={`absolute flex items-center justify-center w-6 h-6 rounded-full -left-3 ring-8 ring-white ${
-                    currentStep > index 
-                      ? 'bg-green-600' 
-                      : currentStep === index 
-                        ? 'bg-blue-700 animate-pulse' 
-                        : 'bg-gray-400'
-                  }`}>
-                    {currentStep > index ? (
-                      <svg className="w-3.5 h-3.5 text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 16 12">
-                        <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M1 5.917 5.724 10.5 15 1.5"/>
-                      </svg>
-                    ) : (
-                      <span className="text-xs text-white">{index + 1}</span>
-                    )}
-                  </span>
-                  <h3 className={`font-medium leading-tight ${
-                    currentStep >= index ? 'text-gray-900' : 'text-gray-500'
-                  }`}>{step}</h3>
-                </li>
-              ))}
-            </ol>
-          </div>
+          {/* Loading Indicator */}
+          {loading && (
+            <div className="flex justify-center items-center py-6">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-700"></div>
+              <p className="ml-3 text-gray-700">Generating report...</p>
+            </div>
+          )}
           
           {/* Error Message */}
-          {error && (
+          {error && !loading && (
             <div className="p-4 mb-4 text-sm text-red-800 bg-red-100 rounded-lg border border-red-200">
-              <p>Error: {error}</p>
+              <p><span className="font-semibold">Error:</span> {error}</p>
             </div>
           )}
           
           {/* Response */}
-          {response && (
+          {response && !loading && (
             <div className="mt-4">
-              <h3 className="font-semibold mb-2 text-gray-900">Results:</h3>
               <div 
-                className="p-4 border border-gray-300 rounded bg-gray-50 max-h-[500px] overflow-y-auto text-gray-800"
+                className="p-4 border border-gray-300 rounded bg-gray-50 max-h-[600px] overflow-y-auto text-gray-800 prose prose-sm max-w-none"
                 dangerouslySetInnerHTML={{ __html: formatResponse(response) }}
               />
             </div>
+          )}
+          {!response && !loading && !error && (
+            <p className="text-gray-600 text-center py-6">Submit the form to generate a report.</p>
           )}
         </div>
       </div>

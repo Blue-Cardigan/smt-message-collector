@@ -1,24 +1,46 @@
-import OpenAI from 'openai';
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextResponse } from 'next/server';
+import fs from 'fs';
+import path from 'path';
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+// Read instructions from the markdown file
+const instructionsPath = path.join(process.cwd(), 'src/app/api/assistant/instructions.md');
+const instructions = fs.readFileSync(instructionsPath, 'utf-8');
+
+// Initialize the Google Generative AI client
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
 const smtApiKey = process.env.SMT_API_KEY;
 
-// Store assistant ID at module level
-let ASSISTANT_ID: string;
+// Configure the generative model
+const generationConfig = {
+  temperature: 0.7, // Adjust temperature as needed
+  topK: 1,
+  topP: 1,
+  maxOutputTokens: 8192,
+};
 
-export const runtime = 'edge';
+// Define the grounding tool using Google Search
+// Note: The API key for Google Search is not explicitly passed here;
+// it's typically handled by the SDK's environment configuration or underlying auth.
+const tools = [{ googleSearch: {} }] as any; // Cast to any to bypass strict type check
+
+// Note: Grounding requires specific model versions, e.g., 'gemini-1.5-pro-latest' or 'gemini-1.5-flash-latest'
+const model = genAI.getGenerativeModel({ 
+  model: "gemini-2.0-flash", // Ensure this model supports grounding
+  // safetySettings removed as per request
+  generationConfig,
+  tools,
+  systemInstruction: instructions, 
+});
 
 export async function POST(req: Request) {
   try {
     const { 
       message, 
       region,
-      queries,
-      apiKey
+      // queries are no longer needed as grounding handles search
+      apiKey 
     } = await req.json();
     
     // Validate API key
@@ -30,114 +52,41 @@ export async function POST(req: Request) {
     }
 
     console.log('Received message:', message);
-    console.log('Search queries:', queries);
     console.log('Region:', region);
 
-    // Forward search request to serverless endpoint
-    const searchUrl = new URL('/api/assistant/status/serverless', req.url);
-    const searchResponse = await fetch(searchUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ 
-        type: 'initial_search',
-        queries,
-        region
-      }),
-    });
+    // Construct the prompt for Gemini, including the region and user message.
+    // Grounding will automatically use the content to perform relevant searches.
+    const prompt = `Region: ${region}
+User query: ${message}
 
-    const searchResults = await searchResponse.json();
+Please research and report on grassroots social movement successes in the specified region, following the instructions provided.`;
 
-    const assistant = await openai.beta.assistants.create({
-      name: "Research Assistant",
-      instructions: `You are an expert web researcher that identifies the successes of grassroots social movements, searches for related social media activity, and provides a newsletter with the results.
-      
-      When you find a success story, ALWAYS use the performTavilySearch function to search for social media activity before including it in your report.
-      
-      A success story is a grassroots social movement victory such as a campaign win, protest victory, or other social movement victory.
-      
-      You will receive search results for a specific region. For each success story:
-      1. Extract key details:
-         - Region and location specifics
-         - Campaign name and objectives
-         - Specific victories or outcomes achieved
-         - Any other relevant details
-         - Organizations and key people involved
-         
-      2. For each story, construct and perform Twitter-specific searches using "site:x.com" and your search function.
-         
-      3. Synthesize all information into a clear newsletter format:
-         ### [Region Name]
-         - Campaign details and direct impact
-         - Names/roles of key organizers and spokespeople
-         - Direct quotes from news sources and social media
-         - Complete URLs of the relevant sources, in format [source name](url)
-         - Official Twitter/X handles and relevant hashtags if found, in format [source name](url)
-         - Coalition partners involved
-         
-      #### Instructions
-      Focus on local/regional victories that demonstrate community organizing impact.
-      Be concise and to the point. Your response should be easy to skim.
-      Only include found information in your response. If information is not found, do not mention it.
-      Do not include a summary.
-      Aim to find at least 1 relevant story for the region.
-      In the rare case that all of the results are irrelevant, your response should be '###[region name]\nNo relevant results found.'.
-      `,
-      model: "gpt-4o",
-      tools: [{
-        type: "function",
-        function: {
-          name: "performTavilySearch",
-          description: "Search the web for Twitter/X activity on each story",
-          parameters: {
-            type: "object",
-            properties: {
-              query: {
-                type: "string",
-                description: "The search query to perform. Use site:x.com for Twitter/X specific searches."
-              }
-            },
-            required: ["query"]
-          }
-        }
-      }]
-    });
-    ASSISTANT_ID = assistant.id;
+    console.log('Sending prompt to Gemini:', prompt);
 
-    const thread = await openai.beta.threads.create();
+    // Generate content using the model with grounding
+    const result = await model.generateContent(prompt);
 
-    const prompt = `Identify social movement successes from these search results for ${region}. Then find related social media activity for each success story.
+    const response = result.response;
+    const text = response.text();
 
-Search Results:
-${JSON.stringify(searchResults, null, 2)}
-
-User prompt:
-${message}`;
-
-    // Send the search results to the assistant
-    await openai.beta.threads.messages.create(thread.id, {
-      role: "user",
-      content: prompt,
-    });
-
-    console.log('full prompt:', prompt);
-
-    // Start the run
-    const run = await openai.beta.threads.runs.create(thread.id, {
-      assistant_id: ASSISTANT_ID,
-    });
+    console.log('Gemini Response:', text);
 
     return NextResponse.json({ 
-      threadId: thread.id,
-      runId: run.id,
-      status: run.status
+      status: "completed", // Directly return completed status
+      response: text 
     });
 
-  } catch (error) {
-    console.error('Error:', error);
+  } catch (error: any) {
+    console.error('Error processing request:', error);
+    // Check if the error is related to grounding (e.g., citations not available)
+    if (error.message && error.message.includes('grounding')) {
+       return NextResponse.json(
+        { error: `Grounding failed: ${error.message}` },
+        { status: 500 }
+      );
+    }
     return NextResponse.json(
-      { error: 'Failed to process request' },
+      { error: `Failed to process request: ${error.message || 'Unknown error'}` },
       { status: 500 }
     );
   }
