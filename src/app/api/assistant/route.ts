@@ -54,12 +54,20 @@ export async function POST(req: Request) {
     console.log('Received message:', message);
     console.log('Region:', region);
 
+    // Get current date and format it
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0'); // Months are 0-indexed
+    const day = String(today.getDate()).padStart(2, '0');
+    const currentDate = `${year}-${month}-${day}`;
+
     // Construct the prompt for Gemini, including the region and user message.
     // Grounding will automatically use the content to perform relevant searches.
-    const prompt = `Region: ${region}
+    const prompt = `Current Date: ${currentDate}
+Region: ${region}
 User query: ${message}
 
-Please research and report on grassroots social movement successes in the specified region, following the instructions provided.`;
+Please research and report on grassroots social movement successes in the specified region, focusing on information from the Current Date (${currentDate}) and the previous day, and following the instructions provided.`;
 
     console.log('Sending prompt to Gemini:', prompt);
 
