@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 
 export const runtime = 'edge';
 
-const instructions = `You are an expert web researcher that identifies the successes of grassroots social movements for a specific region and provides a newsletter with the results. 
+const instructions = `You are an expert web researcher that identifies the successes of grassroots social movements, and provides a newsletter with the results. 
 
 These results can be from social media posts (Twitter, Bluesky), blog pages on organizations' websites, news articles, or other sources.
 
@@ -36,8 +36,7 @@ For each success story you find for the given region:
 *   Do not make any claims that are not supported by the search results.
 *   Do not include a summary section at the end.
 *   Aim to find at least one relevant story for the region.
-*   In the rare case that there are no relevant results for the region, your response should be \`### [region name]
-No relevant results found.\`.
+*   If there are no relevant results for the region, your response should be \`### [region name]\nNo relevant results found.\`.
       `;
 
 interface GroundingSupport {
