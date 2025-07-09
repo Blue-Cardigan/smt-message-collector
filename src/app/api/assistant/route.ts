@@ -14,7 +14,7 @@ const smtApiKey = process.env.SMT_API_KEY;
 
 // Configure the generative model
 const generationConfig = {
-  temperature: 0.7, // Adjust temperature as needed
+  temperature: 1.0, // Set to 1.0 for ideal grounding results
   topK: 1,
   topP: 1,
   maxOutputTokens: 8192,
@@ -27,7 +27,7 @@ const tools = [{ googleSearch: {} }] as any; // Cast to any to bypass strict typ
 
 // Note: Grounding requires specific model versions, e.g., 'gemini-1.5-pro-latest' or 'gemini-1.5-flash-latest'
 const model = genAI.getGenerativeModel({ 
-  model: "gemini-2.0-flash", // Ensure this model supports grounding
+  model: "gemini-2.5-flash", // Ensure this model supports grounding
   // safetySettings removed as per request
   generationConfig,
   tools,
@@ -75,6 +75,13 @@ Please research and report on grassroots social movement successes in the specif
     const result = await model.generateContent(prompt);
 
     const response = result.response;
+    
+    if ((response as any).groundingMetadata) {
+      console.log("Grounding metadata:", (response as any).groundingMetadata);
+    } else {
+      console.log("No grounding metadata in response.");
+    }
+    
     const text = response.text();
 
     console.log('Gemini Response:', text);
