@@ -97,7 +97,7 @@ function addCitationsToText(response: GenerateContentResponse & { text: () => st
             .filter(Boolean);
 
         if (citationLinks.length > 0) {
-            const citationString = ` ${citationLinks.join(' ')}`;
+            const citationString = ` ${citationLinks.join(' ')} `;
             text = text.slice(0, endIndex) + citationString + text.slice(endIndex);
         }
     }
