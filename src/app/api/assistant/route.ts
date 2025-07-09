@@ -3,38 +3,41 @@ import { NextResponse } from 'next/server';
 
 export const runtime = 'edge';
 
-const instructions = `You are an expert web researcher that identifies the successes of grassroots social movements and provides a newsletter with the results.
-      
-      For every claim, story, or data point you present, you MUST provide a corresponding URL to a verifiable source. Your response should be a list of findings, and each finding must have at least one supporting link.
-      
-      A success story is a grassroots social movement victory such as a campaign win, protest victory, or other social movement victory.
-      
-      You will receive search results for a specific region. For each success story:
-      1. Extract key details:
-         - Region and location specifics
-         - Campaign name and objectives
-         - Specific victories or outcomes achieved
-         - Any other relevant details
-         - Organizations and key people involved
-         
-      2. Synthesize all information into a clear newsletter format:
-         ### [Region Name]
-         - Campaign details and direct impact
-         - Names/roles of key organizers and spokespeople
-         - Direct quotes from news sources and social media
-         - Complete URLs of the relevant sources, in format [source name](url)
-         - Official social media handles and relevant hashtags if found, in format [source name](url)
-         - Coalition partners involved
-         
-      #### Instructions
-      Focus on local/regional victories that demonstrate community organizing impact.
-      Be concise and to the point. Your response should be easy to skim.
-      Only include found information in your response. If information is not found, do not mention it.
-      Do not make any claims without a direct link to the source.
-      Do not include a summary.
-      Aim to find at least 1 relevant story for the region.
-      In the rare case that all of the results are irrelevant, your response should be '###[region name]
-No relevant results found.'.
+const instructions = `You are an expert web researcher that identifies the successes of grassroots social movements for a specific region and provides a newsletter with the results. 
+
+These results can be from social media posts (Twitter, Bluesky), blog pages on organizations' websites, news articles, or other sources.
+
+Your responses are grounded in real-time web content using your search capabilities. For every claim, story, or data point you present, you MUST use information from the search results.
+
+A success story is a grassroots social movement victory such as a campaign win, protest victory, or other social movement victory.
+
+For each success story you find for the given region:
+1.  Extract key details:
+    *   Region and location specifics
+    *   Campaign name and objectives
+    *   Specific victories or outcomes achieved
+    *   Organizations and key people involved
+    *   Any other relevant details
+
+2.  Synthesize all information into a clear newsletter format. The output should be structured with markdown.
+
+    ### [Region Name]
+    *   **Campaign:** [Campaign Name]
+        *   **Details:** Campaign details and direct impact.
+        *   **Organizers:** Names/roles of key organizers and spokespeople.
+        *   **Quotes:** Direct quotes from news sources and social media.
+        *   **Partners:** Coalition partners involved.
+        *   **Socials:** Official social media handles and relevant hashtags if found.
+
+#### Instructions
+*   Focus on local/regional victories that demonstrate community organizing impact.
+*   Be concise and to the point. Your response should be easy to skim.
+*   Only include found information in your response. If information is not found for a specific point (e.g., "Partners"), omit that line.
+*   Do not make any claims that are not supported by the search results.
+*   Do not include a summary section at the end.
+*   Aim to find at least one relevant story for the region.
+*   In the rare case that there are no relevant results for the region, your response should be \`### [region name]
+No relevant results found.\`.
       `;
 
 interface GroundingSupport {
@@ -47,6 +50,7 @@ interface GroundingSupport {
 interface GroundingChunk {
   web?: {
     uri?: string;
+    title?: string;
   };
 }
 
@@ -63,9 +67,7 @@ function addCitationsToText(response: GenerateContentResponse & { text: () => st
     }
     const metadata = (candidates[0] as any).groundingMetadata as GroundingMetadata | undefined;
 
-    if (metadata) {
-        console.log("Found grounding metadata:", JSON.stringify(metadata, null, 2));
-    } else {
+    if (!metadata) {
         console.log("No grounding metadata found in candidates.");
         return text;
     }
@@ -75,6 +77,23 @@ function addCitationsToText(response: GenerateContentResponse & { text: () => st
     if (!supports || !chunks) {
         return text;
     }
+
+    const citations: { uri: string; title: string; index: number }[] = [];
+    const chunkMap = new Map<string, number>();
+
+    chunks.forEach((chunk) => {
+        if (chunk.web?.uri) {
+            if (!chunkMap.has(chunk.web.uri)) {
+                const index = citations.length + 1;
+                chunkMap.set(chunk.web.uri, index);
+                citations.push({
+                    uri: chunk.web.uri,
+                    title: chunk.web.title || chunk.web.uri,
+                    index: index,
+                });
+            }
+        }
+    });
 
     const sortedSupports = [...supports].sort(
         (a, b) => (b.segment?.endIndex ?? 0) - (a.segment?.endIndex ?? 0)
@@ -86,23 +105,33 @@ function addCitationsToText(response: GenerateContentResponse & { text: () => st
             continue;
         }
 
-        const citationLinks = support.groundingChunkIndices
-            .map((i: number) => {
-                const chunk = chunks[i];
-                if (chunk && chunk.web && chunk.web.uri) {
-                    return `[${i + 1}](${chunk.web.uri})`;
-                }
-                return null;
-            })
-            .filter(Boolean);
+        const citationIndices = [
+            ...new Set(
+                support.groundingChunkIndices
+                    .map((i: number) => {
+                        const chunk = chunks[i];
+                        return chunk?.web?.uri ? chunkMap.get(chunk.web.uri) : null;
+                    })
+                    .filter((n): n is number => n !== null)
+            ),
+        ];
 
-        if (citationLinks.length > 0) {
-            const citationString = ` ${citationLinks.join(' ')} `;
+        if (citationIndices.length > 0) {
+            const citationString = ` [${citationIndices.sort((a, b) => a - b).join('][')}]`;
             text = text.slice(0, endIndex) + citationString + text.slice(endIndex);
         }
     }
+
+    if (citations.length > 0) {
+        text += '\n\n**Sources:**\n';
+        citations.forEach(citation => {
+            text += `\n[${citation.index}] [${citation.title}](${citation.uri})`;
+        });
+    }
+
     return text;
 }
+
 
 // Initialize the Google Generative AI client
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
@@ -120,11 +149,11 @@ const generationConfig = {
 // Define the grounding tool using Google Search
 // Note: The API key for Google Search is not explicitly passed here;
 // it's typically handled by the SDK's environment configuration or underlying auth.
-const tools = [{ googleSearch: {} }] as any; // Cast to any to bypass strict type check
+const tools = [{ googleSearch: {} }] as any;
 
 // Note: Grounding requires specific model versions, e.g., 'gemini-1.5-pro-latest' or 'gemini-1.5-flash-latest'
 const model = genAI.getGenerativeModel({ 
-  model: "gemini-2.5-flash", // Ensure this model supports grounding
+  model: "gemini-1.5-flash-latest", // Ensure this model supports grounding
   // safetySettings removed as per request
   generationConfig,
   tools,
