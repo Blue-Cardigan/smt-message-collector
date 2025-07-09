@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenerativeAI, GenerateContentResponse } from "@google/generative-ai";
 import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
@@ -6,6 +6,73 @@ import path from 'path';
 // Read instructions from the markdown file
 const instructionsPath = path.join(process.cwd(), 'src/app/api/assistant/instructions.md');
 const instructions = fs.readFileSync(instructionsPath, 'utf-8');
+
+interface GroundingSupport {
+  segment?: {
+    endIndex?: number;
+  };
+  groundingChunkIndices?: number[];
+}
+
+interface GroundingChunk {
+  web?: {
+    uri?: string;
+  };
+}
+
+interface GroundingMetadata {
+  groundingSupports: GroundingSupport[];
+  groundingChunks: GroundingChunk[];
+}
+
+function addCitationsToText(response: GenerateContentResponse & { text: () => string }): string {
+    let text = response.text();
+    const candidates = response.candidates;
+    if (!candidates || candidates.length === 0) {
+        return text;
+    }
+    const metadata = (candidates[0] as any).groundingMetadata as GroundingMetadata | undefined;
+
+    if (metadata) {
+        console.log("Found grounding metadata:", JSON.stringify(metadata, null, 2));
+    } else {
+        console.log("No grounding metadata found in candidates.");
+        return text;
+    }
+
+    const { groundingSupports: supports, groundingChunks: chunks } = metadata;
+
+    if (!supports || !chunks) {
+        return text;
+    }
+
+    const sortedSupports = [...supports].sort(
+        (a, b) => (b.segment?.endIndex ?? 0) - (a.segment?.endIndex ?? 0)
+    );
+
+    for (const support of sortedSupports) {
+        const endIndex = support.segment?.endIndex;
+        if (endIndex === undefined || !support.groundingChunkIndices || support.groundingChunkIndices.length === 0) {
+            continue;
+        }
+
+        const citationLinks = support.groundingChunkIndices
+            .map((i: number) => {
+                const chunk = chunks[i];
+                if (chunk && chunk.web && chunk.web.uri) {
+                    return `[${i + 1}](${chunk.web.uri})`;
+                }
+                return null;
+            })
+            .filter(Boolean);
+
+        if (citationLinks.length > 0) {
+            const citationString = ` ${citationLinks.join(' ')}`;
+            text = text.slice(0, endIndex) + citationString + text.slice(endIndex);
+        }
+    }
+    return text;
+}
 
 // Initialize the Google Generative AI client
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
@@ -76,19 +143,13 @@ Please research and report on grassroots social movement successes in the specif
 
     const response = result.response;
     
-    if ((response as any).groundingMetadata) {
-      console.log("Grounding metadata:", (response as any).groundingMetadata);
-    } else {
-      console.log("No grounding metadata in response.");
-    }
-    
-    const text = response.text();
+    const textWithCitations = addCitationsToText(response);
 
-    console.log('Gemini Response:', text);
+    console.log('Gemini Response with Citations:', textWithCitations);
 
     return NextResponse.json({ 
       status: "completed", // Directly return completed status
-      response: text 
+      response: textWithCitations 
     });
 
   } catch (error: any) {
