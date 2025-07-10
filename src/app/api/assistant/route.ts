@@ -152,7 +152,7 @@ const tools = [{ googleSearch: {} }] as any;
 
 // Note: Grounding requires specific model versions, e.g., 'gemini-1.5-pro-latest' or 'gemini-1.5-flash-latest'
 const model = genAI.getGenerativeModel({ 
-  model: "gemini-1.5-flash-latest", // Ensure this model supports grounding
+  model: "gemini-2.5-flash", // Ensure this model supports grounding
   // safetySettings removed as per request
   generationConfig,
   tools,
